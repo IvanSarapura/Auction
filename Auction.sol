@@ -13,20 +13,20 @@ contract Auction {
     // ========== STATE VARIABLES ==========
 
     /// @dev Contract owner
-    address private propietario;
+    address private owner;
 
     /// @dev Auction information
-    uint256 public tiempoSubasta;
-    bool public subastaActiva;
+    uint256 public auctionTime;
+    bool public auctionActive;
 
-    /// @dev Current best bid
-    uint256 private mejorOferta;
-    address private mejorOfertante;
+    /// @dev Current best bidder and offer
+    uint256 private bestOffer;
+    address private bestBidder;
 
     /// @dev Constants
-    uint256 private constant INCREMENTO_MINIMO = 5;
-    uint256 private constant COMISION_GAS = 2;
-    uint256 private constant EXTENSION_OFERTA = 10 minutes;
+    uint256 private constant MINIMUM_INCREMENT = 5;
+    uint256 private constant GAS_COMMISSION = 2;
+    uint256 private constant AUCTION_EXTENSION = 10 minutes;
 
     // ========== CONSTRUCTOR ==========
 
@@ -34,55 +34,55 @@ contract Auction {
      * @dev Constructor that initializes the contract.
      */
     constructor() {
-        propietario = msg.sender;
-        tiempoSubasta = block.timestamp + 10 minutes;
-        subastaActiva = true;
+        owner = msg.sender;
+        auctionTime = block.timestamp + 10 minutes;
+        auctionActive = true;
     }
 
     // ========== DATA STRUCTURES ==========
 
     /**
      * @dev Data structure to store offers.
-     * @param ofertante The address of the bidder.
-     * @param oferta The amount of the offer.
-     * @param momentoOferta The timestamp of the offer.
+     * @param bidder The address of the bidder.
+     * @param offer The amount of the offer.
+     * @param offerMoment The timestamp of the offer.
      */
-    struct Oferta {
-        address ofertante;
-        uint256 oferta;
-        uint256 momentoOferta;
+    struct Offer {
+        address bidder;
+        uint256 offer;
+        uint256 offerMoment;
     }
 
     /// @dev Mapping to store the balance of each bidder.
     mapping(address => uint256) private balance;
 
     /// @dev Arrays to store the offers and the bidders.
-    Oferta[] public ofertas;
-    address[] public ofertantesUnicos;
+    Offer[] public offers;
+    address[] public uniqueBidders;
 
     // ========== MODIFIERS ==========
 
     /**
      * @dev Modifier to check if the caller is the owner.
      */
-    modifier soloPropietario() {
-        require(msg.sender == propietario, "Solo el propietario puede ejecutar esta funcion");
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
         _;
     }
 
     /**
      * @dev Modifier to check if the auction is active.
      */
-    modifier subastaEnCurso() {
-        require(subastaActiva == true, "The auction is not active");
+    modifier auctionInProgress() {
+        require(auctionActive == true, "Auction inactive");
         _;
     }
 
     /**
      * @dev Modifier to check if the auction is finished.
      */
-    modifier subastaTerminada() {
-        require(subastaActiva == false, "The auction is active");
+    modifier auctionFinished() {
+        require(auctionActive == false, "Auction active");
         _;
     }
 
@@ -93,52 +93,52 @@ contract Auction {
      * @notice The offer must be greater than the minimum offer (5% increment).
      * The function automatically handles bid validation, bidder registration, and auction time extension.
      */
-    function ofertar() external subastaEnCurso payable {
-
-        uint256 _valorOferta = msg.value;
-        uint256 _ofertaMinima = mejorOferta + (mejorOferta * INCREMENTO_MINIMO / 100);
-        address _addrOfertante = msg.sender;
-        bool _ofertanteRegistrado = false;
+    function makeOffer() external auctionInProgress payable {
+        uint256 _offersLength = offers.length;
+        uint256 _valueOffer = msg.value;
+        uint256 _minimumOffer = bestOffer + (bestOffer * MINIMUM_INCREMENT / 100);
+        address _addrBidder = msg.sender;
+        bool _registeredBidder = false;
 
         // Check if the offer is greater than the minimum offer with 5% increment.
-        if (_valorOferta > _ofertaMinima) {
-            mejorOfertante = _addrOfertante;
-            mejorOferta = _valorOferta;
+        if (_valueOffer > _minimumOffer) {
+            bestBidder = _addrBidder;
+            bestOffer = _valueOffer;
 
             // Check if the bidder is registered.
-            for (uint256 i = 0; i < ofertas.length; i++) {
-                if (_addrOfertante == ofertas[i].ofertante) {
-                    ofertas[i].oferta = _valorOferta;
-                    ofertas[i].momentoOferta = block.timestamp;
-                    _ofertanteRegistrado = true;
+            for (uint256 i = 0; i < _offersLength; i++) {
+                if (_addrBidder == offers[i].bidder) {
+                    offers[i].offer = _valueOffer;
+                    offers[i].offerMoment = block.timestamp;
+                    _registeredBidder = true;
                     break;
                 }
             }
 
             // If the bidder is not registered, add the offer to the array.
-            if (!_ofertanteRegistrado) {
-                ofertas.push(Oferta(_addrOfertante, _valorOferta, block.timestamp));
+            if (!_registeredBidder) {
+                offers.push(Offer(_addrBidder, _valueOffer, block.timestamp));
             }
 
             // If the bidder is not registered, add the bidder to the array.
-            if (balance[_addrOfertante] == 0) {
-                ofertantesUnicos.push(_addrOfertante);
+            if (balance[_addrBidder] == 0) {
+                uniqueBidders.push(_addrBidder);
             }
 
             // Add the offer to the balance of the bidder.
-            balance[_addrOfertante] += _valorOferta;
+            balance[_addrBidder] += _valueOffer;
 
             // Emit the event of the new offer.
-            emit nuevaOferta(_addrOfertante, _valorOferta, block.timestamp);
+            emit newOffer(_addrBidder, _valueOffer, block.timestamp);
 
             // If the auction is about to end, extend the auction time by 10 minutes.
-            if (block.timestamp >= (tiempoSubasta - EXTENSION_OFERTA)) {
-                tiempoSubasta = block.timestamp + EXTENSION_OFERTA;
+            if (block.timestamp >= (auctionTime - AUCTION_EXTENSION)) {
+                auctionTime = block.timestamp + AUCTION_EXTENSION;
             }
 
         } else {
             // If the offer is not greater than the minimum offer with 5% increment, revert the transaction.
-              revert("The offer is too low");
+              revert("Offer too low");
         }
     }
 
@@ -149,21 +149,22 @@ contract Auction {
      * @notice The function can only be called by the owner when the auction is finished.
      * Returns deposits to losing bidders minus gas commission, and transfers remaining balance to owner.
      */
-    function devolverDepositos() external soloPropietario subastaTerminada {
-        uint256 _valorDevolver;
-        uint256 _mejorOferta = mejorOferta;
+    function returnDeposits() external onlyOwner auctionFinished {
+        uint256 _uniqueBiddersLength = uniqueBidders.length;
+        uint256 _valueReturn;
+        uint256 _bestOffer = bestOffer;
 
         // Loop through the bidders and return the deposits of the bidders who did not make the best offer.
-        for (uint256 i = 0; i < ofertantesUnicos.length; i++) {
+        for (uint256 i = 0; i < _uniqueBiddersLength; i++) {
             // If the balance of the bidder is less than the best offer, return the deposit.
-            if (balance[ofertantesUnicos[i]] < _mejorOferta) {
+            if (balance[uniqueBidders[i]] < _bestOffer) {
                 // Calculate the amount to return subtracting the gas commission.
-                _valorDevolver = balance[ofertantesUnicos[i]] - (balance[ofertantesUnicos[i]] * COMISION_GAS / 100);
-                balance[ofertantesUnicos[i]] = 0;
-                payable(ofertantesUnicos[i]).transfer(_valorDevolver);
+                _valueReturn = balance[uniqueBidders[i]] - (balance[uniqueBidders[i]] * GAS_COMMISSION / 100);
+                balance[uniqueBidders[i]] = 0;
+                payable(uniqueBidders[i]).transfer(_valueReturn);
             }
         }
-        payable(propietario).transfer(address(this).balance);
+        payable(owner).transfer(address(this).balance);
     }
 
     // ========== PARTIAL REFUND FUNCTION ==========
@@ -173,34 +174,35 @@ contract Auction {
      * @notice The function can only be called by the bidder when the auction is active.
      * Allows bidders to withdraw excess funds from previous bids while keeping their current bid active.
      */
-    function reembolsoParcial() external subastaEnCurso {
-        uint256 _valorDevolver;
+    function partialRefund() external auctionInProgress {
+        uint256 _offersLength = offers.length;
+        uint256 _valueReturn;
         address _extractor = msg.sender;
-        bool _ofertaEncontrada = false;
+        bool _offerFound = false;
         uint256 i;
 
         // Loop through the offers and determine if the bidder has made an offer previously.
-        for (i = 0; i < ofertas.length; i++) {
+        for (i = 0; i < _offersLength; i++) {
             // If the bidder has made an offer previously, break the loop.
-            if (ofertas[i].ofertante == _extractor) {
-                _ofertaEncontrada = true;
+            if (offers[i].bidder == _extractor) {
+                _offerFound = true;
                 break;
             }
         }
 
         // If the bidder has not made an offer previously, revert the transaction.
-        require(_ofertaEncontrada, "The user does not have any offers registered");
+        require(_offerFound, "No offers found");
 
         // Calculate the amount to return.
-        _valorDevolver = balance[_extractor] - ofertas[i].oferta;
+        _valueReturn = balance[_extractor] - offers[i].offer;
 
         // If the amount to return is greater than 0, return the amount.
-        require(_valorDevolver > 0, "The user does not have any values to withdraw");
+        require(_valueReturn > 0, "No funds to withdraw");
 
         // Subtract the amount to return from the balance of the bidder.
-        balance[_extractor] = balance[_extractor] - _valorDevolver;
+        balance[_extractor] = balance[_extractor] - _valueReturn;
         
-        payable(_extractor).transfer(_valorDevolver);
+        payable(_extractor).transfer(_valueReturn);
     }
 
     // ========== FUNCTION TO END THE AUCTION ==========
@@ -209,47 +211,69 @@ contract Auction {
      * @dev Function to end the auction.
      * @notice The function can only be called by the owner when the auction is finished.
      */
-    function terminarSubasta() external soloPropietario {
-        require(block.timestamp > tiempoSubasta, "La subasta aun esta activa. Espera a que termine.");
-        subastaActiva = false;
-        emit subastaFinalizada(mejorOfertante, mejorOferta);
+    function endAuction() external onlyOwner {
+        require(block.timestamp > auctionTime, "Auction active");
+        auctionActive = false;
+        emit auctionFinish(bestBidder, bestOffer);
     }
 
     // ========== FUNCTION TO SHOW THE WINNER ==========
 
     /**
      * @dev Function to show the winner of the auction.
-     * @return mejorOfertante The address of the winner.
-     * @return mejorOferta The amount of the best offer.
+     * @return bestBidder The address of the winner.
+     * @return bestOffer The amount of the best offer.
      */
-    function mostrarGanador() external view returns (address, uint256) {
-        return (mejorOfertante, mejorOferta);
+    function showWinner() external view returns (address, uint256) {
+        return (bestBidder, bestOffer);
     }
 
     // ========== FUNCTION TO SHOW THE LIST OF OFFERS ==========
 
     /**
      * @dev Function to show the list of offers.
-     * @return ofertas The list of offers.
+     * @return offers The list of offers.
      */
-    function listaOfertas() external view returns (Oferta[] memory) {
-        return ofertas;
+    function offersList() external view returns (Offer[] memory) {
+        return offers;
+    }
+
+    // ========== EMERGENCY FUNCTION ==========
+
+    /**
+     * @dev Function to recover ETH in case of emergency.
+     * @notice Only the owner can recover ETH in emergency situations.
+     */
+    function emergencyWithdraw() external onlyOwner {
+        uint256 contractBalance = address(this).balance;
+        require(contractBalance > 0, "No funds");
+
+        payable(owner).transfer(contractBalance);
+        emit emergencyWithdrawal(owner, contractBalance);
     }
 
     // ========== EVENTS ==========
 
     /**
      * @dev Event to emit when a new offer is made.
-     * @param ofertante The address of the bidder.
-     * @param oferta The amount of the offer.
-     * @param momentoOferta The timestamp of the offer.
+     * @param bidder The address of the bidder.
+     * @param offer The amount of the offer.
+     * @param offerMoment The timestamp of the offer.
      */
-    event nuevaOferta(address indexed ofertante, uint256 indexed oferta, uint256 momentoOferta);
+    event newOffer(address indexed bidder, uint256 indexed offer, uint256 offerMoment);
 
     /**
      * @dev Event to emit when the auction is finished.
-     * @param mejorOfertante The address of the winner.
-     * @param mejorOferta The amount of the best offer.
+     * @param bestBidder The address of the winner.
+     * @param bestOffer The amount of the best offer.
      */
-    event subastaFinalizada(address indexed mejorOfertante, uint256 mejorOferta);
+    event auctionFinish(address indexed bestBidder, uint256 bestOffer);
+
+    /**
+     * @dev Event to emit when the emergency withdrawal is executed.
+     * @param owner The address of the owner.
+     * @param contractBalance The amount of the withdrawal.
+     */
+    event emergencyWithdrawal(address indexed owner, uint256 contractBalance);
+
 }
