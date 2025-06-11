@@ -96,7 +96,6 @@ contract Auction {
      * @dev Function to make an offer.
      * @notice The offer must be greater than the minimum offer (5% increment).
      * The function automatically handles bid validation, bidder registration, and auction time extension.
-     * @param None - Uses msg.value as the bid amount and msg.sender as the bidder.
      * @custom:requirements 
      * - Auction must be active
      * - Bid amount must be at least 5% higher than current best offer
@@ -188,7 +187,6 @@ contract Auction {
      * @dev Function to return the bidder's remaining deposits when he made another higher bid.
      * @notice The function can only be called by the bidder when the auction is active.
      * Allows bidders to withdraw excess funds from previous bids while keeping their current bid active.
-     * @param None - Uses msg.sender to identify the bidder requesting refund.
      * @custom:requirements
      * - Auction must be active
      * - Caller must have made at least one bid
