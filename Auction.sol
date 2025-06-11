@@ -94,52 +94,52 @@ contract Auction {
      * The function automatically handles bid validation, bidder registration, and auction time extension.
      */
     function makeOffer() external auctionInProgress payable {
+        uint256 _currentBestOffer = bestOffer;
+        uint256 _minimumOffer = _currentBestOffer + (_currentBestOffer * MINIMUM_INCREMENT / 100);
+        require(msg.value > _minimumOffer, "Offer too low");
+
         uint256 _offersLength = offers.length;
         uint256 _valueOffer = msg.value;
-        uint256 _minimumOffer = bestOffer + (bestOffer * MINIMUM_INCREMENT / 100);
+        uint256 i;
         address _addrBidder = msg.sender;
         bool _registeredBidder = false;
+        
+        uint256 _currentBalance = balance[_addrBidder];
 
-        // Check if the offer is greater than the minimum offer with 5% increment.
-        if (_valueOffer > _minimumOffer) {
-            bestBidder = _addrBidder;
-            bestOffer = _valueOffer;
-
-            // Check if the bidder is registered.
-            for (uint256 i = 0; i < _offersLength; i++) {
-                if (_addrBidder == offers[i].bidder) {
-                    offers[i].offer = _valueOffer;
-                    offers[i].offerMoment = block.timestamp;
-                    _registeredBidder = true;
-                    break;
-                }
+        // Check if the bidder is registered.
+        for (i = 0; i < _offersLength; i++) {
+            if (_addrBidder == offers[i].bidder) {
+                offers[i].offer = _valueOffer;
+                offers[i].offerMoment = block.timestamp;
+                _registeredBidder = true;
+                break;
             }
-
-            // If the bidder is not registered, add the offer to the array.
-            if (!_registeredBidder) {
-                offers.push(Offer(_addrBidder, _valueOffer, block.timestamp));
-            }
-
-            // If the bidder is not registered, add the bidder to the array.
-            if (balance[_addrBidder] == 0) {
-                uniqueBidders.push(_addrBidder);
-            }
-
-            // Add the offer to the balance of the bidder.
-            balance[_addrBidder] += _valueOffer;
-
-            // Emit the event of the new offer.
-            emit newOffer(_addrBidder, _valueOffer, block.timestamp);
-
-            // If the auction is about to end, extend the auction time by 10 minutes.
-            if (block.timestamp >= (auctionTime - AUCTION_EXTENSION)) {
-                auctionTime = block.timestamp + AUCTION_EXTENSION;
-            }
-
-        } else {
-            // If the offer is not greater than the minimum offer with 5% increment, revert the transaction.
-              revert("Offer too low");
         }
+
+        // If the bidder is not registered, add the offer to the array.
+        if (!_registeredBidder) {
+            offers.push(Offer(_addrBidder, _valueOffer, block.timestamp));
+        }
+
+        // If the bidder is not registered, add the bidder to the array.
+        if (_currentBalance == 0) {
+            uniqueBidders.push(_addrBidder);
+        }
+
+        // Add the offer to the balance of the bidder.
+        balance[_addrBidder] = _currentBalance + _valueOffer;
+        // Update the best bidder and offer.
+        bestBidder = _addrBidder;
+        bestOffer = _valueOffer;
+
+        // If the auction is about to end, extend the auction time by 10 minutes.
+        uint256 _currentAuctionTime = auctionTime;
+        if (block.timestamp >= (_currentAuctionTime - AUCTION_EXTENSION)) {
+            auctionTime = block.timestamp + AUCTION_EXTENSION;
+        }
+
+        // Emit the event of the new offer.
+        emit newOffer(_addrBidder, _valueOffer, block.timestamp);
     }
 
     // ========== WITHDRAW FUNCTION ==========
@@ -153,13 +153,15 @@ contract Auction {
         uint256 _uniqueBiddersLength = uniqueBidders.length;
         uint256 _valueReturn;
         uint256 _bestOffer = bestOffer;
+        uint256 i;
 
         // Loop through the bidders and return the deposits of the bidders who did not make the best offer.
-        for (uint256 i = 0; i < _uniqueBiddersLength; i++) {
+        for (i = 0; i < _uniqueBiddersLength; i++) {
+            uint256 _currentBalance = balance[uniqueBidders[i]];
             // If the balance of the bidder is less than the best offer, return the deposit.
-            if (balance[uniqueBidders[i]] < _bestOffer) {
+            if (_currentBalance < _bestOffer) {
                 // Calculate the amount to return subtracting the gas commission.
-                _valueReturn = balance[uniqueBidders[i]] - (balance[uniqueBidders[i]] * GAS_COMMISSION / 100);
+                _valueReturn = _currentBalance - (_currentBalance * GAS_COMMISSION / 100);
                 balance[uniqueBidders[i]] = 0;
                 payable(uniqueBidders[i]).transfer(_valueReturn);
             }
@@ -175,10 +177,11 @@ contract Auction {
      * Allows bidders to withdraw excess funds from previous bids while keeping their current bid active.
      */
     function partialRefund() external auctionInProgress {
-        uint256 _offersLength = offers.length;
-        uint256 _valueReturn;
         address _extractor = msg.sender;
+        uint256 _offersLength = offers.length;
+
         bool _offerFound = false;
+        uint256 offerIndex;
         uint256 i;
 
         // Loop through the offers and determine if the bidder has made an offer previously.
@@ -186,6 +189,7 @@ contract Auction {
             // If the bidder has made an offer previously, break the loop.
             if (offers[i].bidder == _extractor) {
                 _offerFound = true;
+                offerIndex = i;
                 break;
             }
         }
@@ -194,14 +198,13 @@ contract Auction {
         require(_offerFound, "No offers found");
 
         // Calculate the amount to return.
-        _valueReturn = balance[_extractor] - offers[i].offer;
-
+        uint256 _currentBalance = balance[_extractor];
+        uint256 _valueReturn = _currentBalance - offers[offerIndex].offer;
         // If the amount to return is greater than 0, return the amount.
-        require(_valueReturn > 0, "No funds to withdraw");
+        require(_valueReturn > 0, "No funds");
 
         // Subtract the amount to return from the balance of the bidder.
-        balance[_extractor] = balance[_extractor] - _valueReturn;
-        
+        balance[_extractor] = _currentBalance - _valueReturn;
         payable(_extractor).transfer(_valueReturn);
     }
 

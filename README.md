@@ -51,7 +51,7 @@ The `Auction.sol` contract implements a decentralized auction system where:
 
 ### `returnDeposits()`
 - Only the owner can execute this function.
-- This function can only be executed when the auction is active.
+- This function can only be executed when the auction is finished.
 - **Description**: Returns the bid Ether to users who did not win.
 - **Logic**:
   1. Verifies all auction participants.
@@ -98,16 +98,16 @@ The `Auction.sol` contract implements a decentralized auction system where:
 ### `newOffer` 
 - **When emitted**: Every time a valid bid is made.
 - **Parameters**: 
-  - `ofertante`: Who made the bid
-  - `oferta`: Amount bid
-  - `momentoOferta`: Timestamp of when it was made
+  - `bidder`: Who made the bid
+  - `offer`: Amount bid
+  - `offerMoment`: Timestamp of when it was made
 
-### `auctionFinished`
+### `auctionFinish`
 
 - **When emitted**: When the owner officially ends the auction.  
 - **Parameters**:
-  - `mejorOfertante`: Winner's address
-  - `mejorOferta`: Winning amount
+  - `bestBidder`: Winner's address
+  - `bestOffer`: Winning amount
 
 ### `emergencyWithdrawal`
 
