@@ -21,8 +21,8 @@ The `Auction.sol` contract implements a decentralized auction system where:
 - **`bestOffer`**: The highest amount that has been bid so far.
 - **`bestBidder`**: The address of the user who made the best bid.
 - **`balance`**: Records how much Ether each user has deposited.
-- **`offers`**: Array that stores in a list all the bids made by users.
-- **`uniqueBidders`**: List of all addresses of users who have participated.
+- **`offers`**: Array that stores all bids made by users as `Offer` structs.
+- **`uniqueBidders`**: List of all unique addresses of users who have participated.
 
 ### Constants
 - **`MINIMUM_INCREMENT`** = 5: Each new bid must be 5% higher than the previous one.
@@ -44,15 +44,16 @@ The `Auction.sol` contract implements a decentralized auction system where:
 - **Logic**:
   1. Verifies that the new bid is at least 5% higher than the previous best bid.
   2. Updates the values to indicate the new best bid and new best bidder.
-  3. Registers the user if it's the first time they make a bid.
-  4. Updates the user's balance by adding their new bid.
-  5. Extends the auction time if the bid occurs near the end of the auction.
-  6. Emits an event to indicate that there was a new bid.
+  3. If the user has bid before, updates their existing offer; otherwise creates a new offer entry.
+  4. Registers the user in the uniqueBidders list if it's their first time bidding.
+  5. Updates the user's balance by adding their new bid to their existing balance.
+  6. Extends the auction time if the bid occurs near the end of the auction.
+  7. Emits an event to indicate that there was a new bid.
 
 ### `returnDeposits()`
 - Only the owner can execute this function.
 - This function can only be executed when the auction is finished.
-- **Description**: Returns the bid Ether to users who did not win.
+- **Description**: Returns the bid Ether to users who did not win and transfers the remaining balance to the owner.
 - **Logic**:
   1. Verifies all auction participants.
   2. If the user's balance is less than the best bidder's, their Ether is returned.
@@ -60,7 +61,7 @@ The `Auction.sol` contract implements a decentralized auction system where:
   4. The rest of the balance is transferred to the contract owner.
 
 ### `partialRefund()`
-- Any user can call this function while the auction is active.
+- Any user who has made at least one bid can call this function while the auction is active.
 - **Description**: Allows users to withdraw the excess from their previous deposits.
 - **Logic**:
   1. Searches all bids made by the user.
