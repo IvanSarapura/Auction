@@ -15,11 +15,13 @@ contract Auction {
     /// @dev Contract owner
     address private owner;
 
-    /// @dev Auction information
+    /// @dev Timestamp when the auction ends (can be extended)
     uint256 public auctionTime;
+    
+    /// @dev Boolean indicating if the auction is currently active
     bool public auctionActive;
 
-    /// @dev Current best bidder and offer
+    /// @dev Amount of the current highest offer and bidder
     uint256 private bestOffer;
     address private bestBidder;
 
@@ -32,6 +34,8 @@ contract Auction {
 
     /**
      * @dev Constructor that initializes the contract.
+     * @notice Sets up a new auction with 10 minutes duration and activates it.
+     * The deployer becomes the owner of the auction.
      */
     constructor() {
         owner = msg.sender;
@@ -92,6 +96,11 @@ contract Auction {
      * @dev Function to make an offer.
      * @notice The offer must be greater than the minimum offer (5% increment).
      * The function automatically handles bid validation, bidder registration, and auction time extension.
+     * @param None - Uses msg.value as the bid amount and msg.sender as the bidder.
+     * @custom:requirements 
+     * - Auction must be active
+     * - Bid amount must be at least 5% higher than current best offer
+     * - Must send ETH with the transaction
      */
     function makeOffer() external auctionInProgress payable {
         uint256 _currentBestOffer = bestOffer;
@@ -147,7 +156,11 @@ contract Auction {
     /**
      * @dev Function to return the deposits of the bidders who did not make the best offer.
      * @notice The function can only be called by the owner when the auction is finished.
-     * Returns deposits to losing bidders minus gas commission, and transfers remaining balance to owner.
+     * Returns deposits to losing bidders minus gas commission, and transfers remaining balance to owner. 
+     * @custom:requirements
+     * - Only owner can call this function
+     * - Auction must be finished
+     * - Contract must have sufficient balance for transfers
      */
     function returnDeposits() external onlyOwner auctionFinished {
         uint256 _uniqueBiddersLength = uniqueBidders.length;
@@ -175,6 +188,11 @@ contract Auction {
      * @dev Function to return the bidder's remaining deposits when he made another higher bid.
      * @notice The function can only be called by the bidder when the auction is active.
      * Allows bidders to withdraw excess funds from previous bids while keeping their current bid active.
+     * @param None - Uses msg.sender to identify the bidder requesting refund.
+     * @custom:requirements
+     * - Auction must be active
+     * - Caller must have made at least one bid
+     * - Caller must have excess funds to withdraw (balance > current bid)
      */
     function partialRefund() external auctionInProgress {
         address _extractor = msg.sender;
@@ -212,7 +230,13 @@ contract Auction {
 
     /**
      * @dev Function to end the auction.
-     * @notice The function can only be called by the owner when the auction is finished.
+     * @notice The function can only be called by the owner when the auction time has expired.
+     * @custom:requirements
+     * - Only owner can call this function
+     * - Current timestamp must be greater than auctionTime
+     * @custom:effects
+     * - Sets auctionActive to false
+     * - Emits auctionFinish event with winner information
      */
     function endAuction() external onlyOwner {
         require(block.timestamp > auctionTime, "Auction active");
@@ -224,8 +248,9 @@ contract Auction {
 
     /**
      * @dev Function to show the winner of the auction.
-     * @return bestBidder The address of the winner.
-     * @return bestOffer The amount of the best offer.
+     * @notice View function that returns the current highest bidder and offer amount.
+     * @return bestBidder The address of the current winner.
+     * @return bestOffer The amount of the current highest offer.
      */
     function showWinner() external view returns (address, uint256) {
         return (bestBidder, bestOffer);
@@ -235,7 +260,8 @@ contract Auction {
 
     /**
      * @dev Function to show the list of offers.
-     * @return offers The list of offers.
+     * @notice View function that returns the complete history of all offers made.
+     * @return offers Array of Offer structs containing bidder, amount, and timestamp for each offer.
      */
     function offersList() external view returns (Offer[] memory) {
         return offers;
@@ -246,6 +272,11 @@ contract Auction {
     /**
      * @dev Function to recover ETH in case of emergency.
      * @notice Only the owner can recover ETH in emergency situations.
+     * This function should only be used if there are stuck funds or critical issues.
+     * @custom:requirements
+     * - Only owner can call this function
+     * - Contract must have ETH balance greater than 0
+     * @custom:security Critical function
      */
     function emergencyWithdraw() external onlyOwner {
         uint256 contractBalance = address(this).balance;
